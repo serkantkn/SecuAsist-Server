@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuAsist | Yönetim Paneli</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .sidebar-item-active { background: linear-gradient(90deg, #3b82f633 0%, #3b82f600 100%); border-left: 4px solid #3b82f6; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="overflow-hidden">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- SHARED UI COMPONENTS ---
+
+        const Modal = ({ title, isOpen, onClose, children }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+                    <div className="glass w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col max-h-[90vh]">
+                        <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center shrink-0">
+                            <h3 className="text-lg font-semibold">{title}</h3>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl">&times;</button>
+                        </div>
+                        <div className="p-6 overflow-y-auto flex-1">
+                            {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const Input = ({ label, value, onChange, type = "text", placeholder = "" }) => (
+            <div className="space-y-1">
+                {label && <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">{label}</label>}
+                <input 
+                    type={type} 
+                    value={value || ''} 
+                    onChange={e => onChange(e.target.value)}
+                    placeholder={placeholder}
+                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                />
+            </div>
+        );
+
+        const Toggle = ({ label, value, onChange }) => (
+            <div className="flex items-center justify-between p-3 glass rounded-lg">
+                <span className="text-sm font-medium">{label}</span>
+                <button 
+                    onClick={() => (onChange ? onChange(value === 1 ? 0 : 1) : null)}
+                    className={`w-10 h-5 rounded-full relative transition-colors ${value === 1 ? 'bg-blue-600' : 'bg-slate-700'} ${!onChange ? 'opacity-50 cursor-default' : ''}`}
+                >
+                    <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${value === 1 ? 'left-6' : 'left-1'}`}></div>
+                </button>
+            </div>
+        );
+
+        // --- PAGE COMPONENTS ---
+
+        const Sidebar = ({ activeTab, setActiveTab }) => {
+            const items = [
+                { id: 'dashboard', label: 'Panel', icon: '📊' },
+                { id: 'villas', label: 'Villalar', icon: '🏡' },
+                { id: 'contacts', label: 'Kişiler', icon: '👥' },
+                { id: 'cargos', label: 'Kargolar', icon: '📦' },
+                { id: 'faults', label: 'Arızalar', icon: '🛠️' },
+                { id: 'logs', label: 'Sistem Logları', icon: '📜' },
+            ];
+
+            return (
+                <div className="w-64 h-screen glass border-r border-slate-700 flex flex-col shrink-0">
+                    <div className="p-6">
+                        <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent italic">SecuAsist</h1>
+                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-semibold flex items-center">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
+                            Yönetim Merkezi v0.6
+                        </p>
+                    </div>
+                    <nav className="flex-1 mt-4">
+                        {items.map(item => (
+                            <button
+                                key={item.id}
+                                onClick={() => setActiveTab(item.id)}
+                                className={`w-full flex items-center px-6 py-4 text-sm transition-all ${activeTab === item.id ? 'sidebar-item-active text-blue-400 font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
+                            >
+                                <span className="mr-3 text-lg">{item.icon}</span>
+                                {item.label}
+                            </button>
+                        ))}
+                    </nav>
+                </div>
+            );
+        };
+
+        const VillaPage = ({ villas, contacts, onUpdate }) => {
+            const [search, setSearch] = useState('');
+            const [editingVilla, setEditingVilla] = useState(null);
+            const [viewingVilla, setViewingVilla] = useState(null);
+            const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+            const filteredVillas = (villas || []).filter(v => 
+                v.villaNo?.toString().includes(search) || 
+                v.villaStreet?.toLowerCase().includes(search.toLowerCase())
+            );
+
+            const handleSave = async () => {
+                if (!editingVilla.villaNo) { alert("Villa No zorunludur!"); return; }
+                try {
+                    const data = { ...editingVilla, updatedAt: Date.now() };
+                    const res = await fetch('/api/v1/villas', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                    if (res.ok) { onUpdate(); setEditingVilla(null); }
+                    else { const err = await res.json(); alert("Hata: " + JSON.stringify(err.detail)); }
+                } catch (e) { alert("Bağlantı hatası: " + e.message); }
+            };
+
+            const villaContacts = useMemo(() => {
+                const target = viewingVilla || editingVilla;
+                if (!target || !target.villaId) return [];
+                return (contacts || []).filter(c => c.villaId === target.villaId);
+            }, [viewingVilla, editingVilla, contacts]);
+
+            const availableContacts = useMemo(() => {
+                if (!editingVilla || !editingVilla.villaId) return [];
+                return (contacts || []).filter(c => c.villaId !== editingVilla.villaId);
+            }, [editingVilla, contacts]);
+
+            const updateContactVilla = async (contact, newVillaId) => {
+                if (!contact || !contact.contactId) {
+                    console.error("Invalid contact for update:", contact);
+                    return;
+                }
+                try {
+                    const res = await fetch('/api/v1/contacts', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...contact, villaId: newVillaId, updatedAt: Date.now() })
+                    });
+                    if(res.ok) {
+                        console.log(`Contact ${contact.contactId} updated with villa ${newVillaId}`);
+                        onUpdate();
+                    } else {
+                        const err = await res.json();
+                        console.error("API Error updating contact:", err);
+                    }
+                } catch (e) { console.error("Network Error updating contact:", e); }
+            };
+
+            const renderVillaStatuses = (villa) => {
+                const statuses = [
+                    { label: "Sadece Cep", value: villa.isCallOnlyMobile, color: "rose", icon: "📱" },
+                    { label: "Kiralık", value: villa.isVillaRental, color: "purple", icon: "🔑" },
+                    { label: "Boş", value: villa.isVillaEmpty, color: "rose", icon: "🏠" },
+                    { label: "Şantiye", value: villa.isVillaUnderConstruction, color: "amber", icon: "🔨" },
+                    { label: "Evden Aransın", value: villa.isVillaCallFromHome, color: "emerald", icon: "📞" },
+                    { label: "Kargo Red", value: villa.isVillaCallForCargo === 0 ? 1 : 0, color: "rose", icon: "📦" },
+                    { label: "VIP / ÖZEL", value: villa.isVillaSpecial, color: "amber", icon: "⭐" }
+                ].filter(s => s.value === 1);
+
+                if (statuses.length === 0) return <p className="text-slate-500 italic text-xs">Aktif özellik bulunmuyor.</p>;
+
+                return (
+                    <div className="flex flex-wrap gap-2">
+                        {statuses.map(s => (
+                            <span key={s.label} title={s.label} className={`px-3 py-1 rounded-full bg-${s.color}-500/10 text-${s.color}-400 border border-${s.color}-500/20 text-[10px] font-bold flex items-center gap-1.5`}>
+                                <span>{s.icon}</span>
+                                <span className="uppercase tracking-wider">{s.label}</span>
+                            </span>
+                        ))}
+                    </div>
+                );
+            };
+
+            return (
+                <div className="flex flex-col h-full animate-fade-in">
+                    <div className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-xl px-8 py-4 border-b border-white/5 flex justify-between items-center shrink-0">
+                        <div className="shrink-0 mr-8">
+                            <h2 className="text-2xl font-bold">Villalar</h2>
+                            <p className="text-slate-400 text-[10px] mt-1 font-mono uppercase tracking-widest">{villas.length} kayıtlı villa</p>
+                        </div>
+                        <div className="flex space-x-4 items-center">
+                            <div className="relative">
+                                <input 
+                                    type="text" 
+                                    placeholder="Villa veya sokak ara..." 
+                                    className="bg-slate-800/50 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm w-64 focus:border-blue-500 outline-none"
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                />
+                                <span className="absolute left-3 top-2.5 opacity-40">🔍</span>
+                            </div>
+                            <label className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer flex items-center">
+                                📤 CSV İçe Aktar
+                                <input type="file" className="hidden" accept=".csv" onChange={async (e) => {
+                                    const file = e.target.files[0];
+                                    if(!file) return;
+                                    const formData = new FormData();
+                                    formData.append('file', file);
+                                    const res = await fetch('/api/v1/import/villas', { method:'POST', body:formData });
+                                    if(res.ok) { const data = await res.json(); alert(`${data.count} villa başarıyla içe aktarıldı.`); onUpdate(); }
+                                    else { alert("Yükleme hatası!"); }
+                                }} />
+                            </label>
+                            <button onClick={() => setEditingVilla({ villaNo: '', villaStreet: '', deviceId: 'Sunucu' })} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition-all">+ Yeni Villa</button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-8 pb-32">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                            {filteredVillas.map(v => (
+                                <div key={v.villaId} onClick={() => setViewingVilla(v)} className="glass p-5 rounded-2xl hover:border-blue-500/40 transition-all group relative overflow-hidden cursor-pointer">
+                                    <div className="flex justify-between items-start z-10 relative">
+                                        <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center font-bold text-xl text-blue-400 border border-blue-500/20">
+                                            {v.villaNo}
+                                        </div>
+                                        <div className="flex space-x-1">
+                                            {confirmDeleteId === v.villaId ? (
+                                                <div className="flex items-center space-x-1 animate-fade-in" onClick={e => e.stopPropagation()}>
+                                                    <button onClick={async () => { 
+                                                        const res = await fetch(`/api/v1/villas/${v.villaId}`, {method:'DELETE'}); 
+                                                        if(res.ok) { onUpdate(); setConfirmDeleteId(null); } else alert("Silme hatası!");
+                                                    }} className="p-2 bg-rose-600 text-white rounded-lg text-[10px] font-bold">EVET</button>
+                                                    <button onClick={() => setConfirmDeleteId(null)} className="p-2 bg-slate-700 text-white rounded-lg text-[10px] font-bold">İPTAL</button>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <button onClick={(e) => { e.stopPropagation(); setEditingVilla(v); }} className="p-2 glass rounded-lg hover:text-blue-400 group-hover:opacity-100 transition-opacity">✏️</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(v.villaId); }} className="p-2 glass rounded-lg hover:text-rose-400 group-hover:opacity-100 transition-opacity z-20">🗑️</button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 z-10 relative">
+                                        <h4 className="font-semibold text-slate-200 truncate">{v.villaStreet || 'İsimsiz Sokak'}</h4>
+                                        <p className="text-[10px] text-slate-500 mt-0.5 font-medium truncate uppercase tracking-tighter">Nav A: {v.villaNavigationA || '-'}</p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5 mt-4 z-10 relative">
+                                        {v.isVillaUnderConstruction === 1 && <span title="Şantiye" className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center text-[10px] border border-amber-500/20">🔨</span>}
+                                        {v.isVillaEmpty === 1 && <span title="Boş" className="w-6 h-6 rounded-full bg-rose-500/10 flex items-center justify-center text-[10px] border border-rose-500/20">🏠</span>}
+                                        {v.isVillaRental === 1 && <span title="Kiralık" className="w-6 h-6 rounded-full bg-purple-500/10 flex items-center justify-center text-[10px] border border-purple-500/20">🔑</span>}
+                                        {v.isVillaSpecial === 1 && <span title="VIP / ÖZEL" className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center text-[10px] border border-amber-500/20">⭐</span>}
+                                        {v.isVillaCallFromHome === 1 && <span title="Evden Aransın" className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center text-[10px] border border-emerald-500/20">📞</span>}
+                                        {v.isVillaCallForCargo === 0 && <span title="Kargo Red" className="w-6 h-6 rounded-full bg-rose-500/10 flex items-center justify-center text-[10px] border border-rose-500/20">📦</span>}
+                                        {v.isCallOnlyMobile === 1 && <span title="Sadece Cep" className="w-6 h-6 rounded-full bg-rose-500/10 flex items-center justify-center text-[10px] border border-rose-500/20">📱</span>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* VILLA DETAIL MODAL */}
+                    <Modal title="Villa Detayları" isOpen={!!viewingVilla} onClose={() => setViewingVilla(null)}>
+                        {viewingVilla && (
+                            <div className="space-y-8 pb-4">
+                                <div className="flex items-center space-x-6">
+                                    <div className="w-20 h-20 rounded-2xl bg-blue-500/10 flex items-center justify-center font-bold text-4xl text-blue-400 border border-blue-500/20">
+                                        {viewingVilla.villaNo}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-2xl font-bold text-white">{viewingVilla.villaStreet || 'İsimsiz Sokak'}</h3>
+                                        <p className="text-slate-400 text-sm mt-1 uppercase tracking-widest font-medium">SecuAsist Villa Tanımlaması</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="glass p-4 rounded-xl border-l-4 border-blue-500">
+                                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">A KAPI YOL TARİFİ</p>
+                                        <p className="text-sm mt-1 font-medium">{viewingVilla.villaNavigationA || 'Belirtilmedi'}</p>
+                                    </div>
+                                    <div className="glass p-4 rounded-xl border-l-4 border-indigo-500">
+                                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">B KAPI YOL TARİFİ</p>
+                                        <p className="text-sm mt-1 font-medium">{viewingVilla.villaNavigationB || 'Belirtilmedi'}</p>
+                                    </div>
+                                    <div className="md:col-span-2 glass p-4 rounded-xl">
+                                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-2">VİLLA NOTLARI</p>
+                                        <p className="text-sm italic text-slate-300">{viewingVilla.villaNotes || 'Kayıtlı not bulunmuyor.'}</p>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center">
+                                        <span className="w-8 h-[1px] bg-slate-700 mr-3"></span>
+                                        VİLLA DURUMU
+                                    </h4>
+                                    {renderVillaStatuses(viewingVilla)}
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center">
+                                        <span className="w-8 h-[1px] bg-slate-700 mr-3"></span>
+                                        BAĞLI KİŞİLER ({villaContacts.length})
+                                    </h4>
+                                    <div className="space-y-3">
+                                        {villaContacts.map(c => (
+                                            <div key={c.contactId} className="glass p-4 rounded-xl flex justify-between items-center group hover:border-blue-500/30 transition-all">
+                                                <div className="flex items-center space-x-3">
+                                                    <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-lg">👤</div>
+                                                    <div>
+                                                        <p className="font-semibold text-sm">{c.contactName}</p>
+                                                        <p className="text-xs text-slate-500">{c.contactPhone}</p>
+                                                    </div>
+                                                </div>
+                                                <span className="text-[10px] font-bold bg-blue-500/10 text-blue-400 px-2.5 py-1 rounded-full border border-blue-500/20 uppercase">
+                                                    {c.contactType}
+                                                </span>
+                                            </div>
+                                        ))}
+                                        {villaContacts.length === 0 && (
+                                            <div className="p-8 text-center glass rounded-xl border-dashed border-slate-700 text-slate-500 italic text-sm">
+                                                Bu villaya bağlı herhangi bir kişi bulunamadı.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                <div className="pt-4 flex justify-end">
+                                    <button onClick={() => setViewingVilla(null)} className="bg-slate-800 hover:bg-slate-700 px-8 py-2.5 rounded-xl text-sm font-bold transition-all">KAPAT</button>
+                                </div>
+                            </div>
+                        )}
+                    </Modal>
+
+                    {/* VILLA EDIT MODAL */}
+                    <Modal title={editingVilla?.villaId ? "Villa Düzenle" : "Yeni Villa"} isOpen={!!editingVilla} onClose={() => setEditingVilla(null)}>
+                        <div className="space-y-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <Input label="Villa No" value={editingVilla?.villaNo} onChange={val => setEditingVilla({...editingVilla, villaNo: val})} type="number" />
+                                <Input label="Sokak" value={editingVilla?.villaStreet} onChange={val => setEditingVilla({...editingVilla, villaStreet: val})} />
+                                <Input label="A Kapısı Yol Tarifi" value={editingVilla?.villaNavigationA} onChange={val => setEditingVilla({...editingVilla, villaNavigationA: val})} />
+                                <Input label="B Kapısı Yol Tarifi" value={editingVilla?.villaNavigationB} onChange={val => setEditingVilla({...editingVilla, villaNavigationB: val})} />
+                                <div className="md:col-span-2"><Input label="Villa Notları" value={editingVilla?.villaNotes} onChange={val => setEditingVilla({...editingVilla, villaNotes: val})} /></div>
+                                <Toggle label="Sadece Cepten Ara" value={editingVilla?.isCallOnlyMobile} onChange={val => setEditingVilla({...editingVilla, isCallOnlyMobile: val})} />
+                                <Toggle label="Şantiye / İnşaat" value={editingVilla?.isVillaUnderConstruction} onChange={val => setEditingVilla({...editingVilla, isVillaUnderConstruction: val})} />
+                                <Toggle label="Özel Durum" value={editingVilla?.isVillaSpecial} onChange={val => setEditingVilla({...editingVilla, isVillaSpecial: val})} />
+                                <Toggle label="Kiralık Villa" value={editingVilla?.isVillaRental} onChange={val => setEditingVilla({...editingVilla, isVillaRental: val})} />
+                                <Toggle label="Dahili Arama İzni" value={editingVilla?.isVillaCallFromHome} onChange={val => setEditingVilla({...editingVilla, isVillaCallFromHome: val})} />
+                                <Toggle label="Kargo Arama İzni" value={editingVilla?.isVillaCallForCargo} onChange={val => setEditingVilla({...editingVilla, isVillaCallForCargo: val})} />
+                                <Toggle label="Boş Villa" value={editingVilla?.isVillaEmpty} onChange={val => setEditingVilla({...editingVilla, isVillaEmpty: val})} />
+                            </div>
+
+                            {editingVilla?.villaId && (
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center">
+                                        <span className="w-8 h-[1px] bg-slate-700 mr-3"></span>
+                                        Kişi Eşleştirme
+                                    </h4>
+                                    
+                                    <div className="space-y-4">
+                                        <div className="p-4 glass rounded-xl space-y-3">
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Rehberden Kişi Ekle</p>
+                                            <div className="flex gap-2">
+                                                <select className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500" onChange={(e) => {
+                                                    const cid = e.target.value;
+                                                    if(!cid) return;
+                                                    const contact = contacts.find(c => c.contactId === parseInt(cid));
+                                                    updateContactVilla(contact, editingVilla.villaId);
+                                                    e.target.value = "";
+                                                }}>
+                                                    <option value="">Seçiniz...</option>
+                                                    {availableContacts.map(c => <option key={c.contactId} value={c.contactId}>{c.contactName} ({c.contactPhone})</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                            {villaContacts.map(c => (
+                                                <div key={c.contactId} className="glass px-4 py-2 rounded-lg flex justify-between items-center text-sm border-l-2 border-emerald-500">
+                                                    <span className="truncate">{c.contactName}</span>
+                                                    <button onClick={() => updateContactVilla(c, null)} className="text-slate-500 hover:text-rose-500 text-lg ml-2 font-bold px-1">&times;</button>
+                                                </div>
+                                            ))}
+                                            {villaContacts.length === 0 && <p className="text-xs text-slate-500 italic col-span-2 p-2">Bağlı kişi yok.</p>}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="pt-4 flex justify-end space-x-3">
+                                <button onClick={() => setEditingVilla(null)} className="px-6 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors border border-transparent">İptal</button>
+                                <button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 px-8 py-2 rounded-lg text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all">DEĞİŞİKLİKLERİ KAYDET</button>
+                            </div>
+                        </div>
+                    </Modal>
+                </div>
+            );
+        };
+
+        const ContactPage = ({ contacts, allVillas, onUpdate }) => {
+            const [search, setSearch] = useState('');
+            const [editingContact, setEditingContact] = useState(null);
+            const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+            const filtered = (contacts || []).filter(c => 
+                c.contactName?.toLowerCase().includes(search.toLowerCase()) || 
+                c.contactPhone?.includes(search)
+            );
+
+            const handleSave = async () => {
+                if (!editingContact.contactName || !editingContact.contactPhone) { alert("İsim ve Telefon zorunludur!"); return; }
+                try {
+                    const data = { ...editingContact, updatedAt: Date.now() };
+                    const res = await fetch('/api/v1/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+                    if (res.ok) { onUpdate(); setEditingContact(null); }
+                    else { const err = await res.json(); alert("Kayıt hatası: " + JSON.stringify(err.detail)); }
+                } catch (e) { alert("Sunucuya ulaşılamıyor: " + e.message); }
+            };
+
+            return (
+                <div className="flex flex-col h-full animate-fade-in">
+                    <div className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-xl px-8 py-4 border-b border-white/5 flex justify-between items-center shrink-0">
+                        <div>
+                            <h2 className="text-2xl font-bold">Kişi Rehberi</h2>
+                            <p className="text-slate-400 text-[10px] mt-1 font-mono uppercase tracking-widest">{filtered.length} kayıt listeleniyor</p>
+                        </div>
+                        <div className="flex space-x-4 items-center">
+                            <Input label="" value={search} onChange={setSearch} placeholder="İsim veya telefon ara..." />
+                            <button onClick={() => setEditingContact({ contactName: '', contactPhone: '', contactType: 'Diğer', deviceId: 'Sunucu' })} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium tracking-tight">+ Yeni Kişi</button>
+                        </div>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto p-8 pb-32">
+                        <div className="glass rounded-2xl overflow-hidden">
+                            <table className="w-full text-left text-sm">
+                                <thead className="sticky top-0 z-10 bg-slate-900 shadow-sm shadow-black/20">
+                                    <tr className="border-b border-slate-700">
+                                        <th className="px-6 py-4 font-semibold text-slate-400">İsim</th>
+                                        <th className="px-6 py-4 font-semibold text-slate-400">Telefon</th>
+                                        <th className="px-6 py-4 font-semibold text-slate-400">Tür</th>
+                                        <th className="px-6 py-4 font-semibold text-slate-400 text-right">Aksiyon</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800">
+                                    {filtered.map(c => (
+                                        <tr key={c.contactId} className="hover:bg-slate-800/30 transition-colors">
+                                            <td className="px-6 py-4 font-medium">{c.contactName}</td>
+                                            <td className="px-6 py-4 text-slate-400">{c.contactPhone}</td>
+                                            <td className="px-6 py-4"><span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] font-bold uppercase">{c.contactType}</span></td>
+                                            <td className="px-6 py-4 text-right">
+                                                {confirmDeleteId === c.contactId ? (
+                                                    <div className="flex items-center justify-end space-x-1">
+                                                        <button onClick={async () => { 
+                                                            const res = await fetch(`/api/v1/contacts/${c.contactId}`, {method:'DELETE'}); 
+                                                            if(res.ok) { onUpdate(); setConfirmDeleteId(null); } else alert("Hata!");
+                                                        }} className="px-2 py-1 bg-rose-600 text-white rounded text-[10px] font-bold">SİL</button>
+                                                        <button onClick={() => setConfirmDeleteId(null)} className="px-2 py-1 bg-slate-700 text-white rounded text-[10px] font-bold">X</button>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <button onClick={() => setEditingContact(c)} className="p-1 hover:text-blue-400 mr-2 text-lg">✏️</button>
+                                                        <button onClick={() => setConfirmDeleteId(c.contactId)} className="p-1 hover:text-rose-400 text-lg">🗑️</button>
+                                                    </>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <Modal title="Kişi Bilgileri" isOpen={!!editingContact} onClose={() => setEditingContact(null)}>
+                        <div className="space-y-4">
+                            <Input label="İsim Soyisim" value={editingContact?.contactName} onChange={val => setEditingContact({...editingContact, contactName: val})} />
+                            <Input label="Telefon" value={editingContact?.contactPhone} onChange={val => setEditingContact({...editingContact, contactPhone: val})} />
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">İlgili Villa</label>
+                                <select 
+                                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                                    value={editingContact?.villaId || ''}
+                                    onChange={e => setEditingContact({...editingContact, villaId: e.target.value ? parseInt(e.target.value) : null})}
+                                >
+                                    <option value="">Villa Seçilmedi</option>
+                                    {(allVillas || []).map(v => (<option key={v.villaId} value={v.villaId}>Villa {v.villaNo} - {v.villaStreet}</option>))}
+                                </select>
+                            </div>
+                            <Input label="Kişi Türü" value={editingContact?.contactType} onChange={val => setEditingContact({...editingContact, contactType: val})} />
+                            <button onClick={handleSave} className="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg text-sm font-bold mt-4 transition-all shadow-lg shadow-blue-500/20">KAYDET</button>
+                        </div>
+                    </Modal>
+                </div>
+            );
+        };
+
+        const FaultPage = ({ cameras, intercoms }) => (
+            <div className="flex flex-col h-full animate-fade-in">
+                <div className="px-8 py-4 border-b border-white/5 shrink-0 bg-slate-950/80 backdrop-blur-xl">
+                    <h2 className="text-2xl font-bold">Sistem Sağlık Durumu</h2>
+                    <p className="text-slate-400 text-[10px] mt-1 font-mono uppercase tracking-widest">Canlı cihaz izleme</p>
+                </div>
+                <div className="flex-1 overflow-y-auto p-8 space-y-8 pb-32">
+                    <section>
+                        <h3 className="text-xl font-bold mb-4 flex items-center">📷 Kameralar <span className="ml-3 text-xs bg-rose-500 text-white px-2 py-0.5 rounded-full">{cameras.filter(c => !c.isWorking).length} Arıza</span></h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {cameras.map(c => (
+                                <div key={c.cameraId} className={`glass p-4 rounded-xl border-l-4 ${c.isWorking ? 'border-emerald-500' : 'border-rose-500'}`}>
+                                    <div className="flex justify-between items-center">
+                                        <h5 className="font-medium text-sm">{c.cameraName}</h5>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${c.isWorking ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>{c.isWorking ? 'ÇALIŞIYOR' : 'ARIZALI'}</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 mt-2 font-mono">IP: {c.cameraIp || 'Belirlenmedi'}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                    <section>
+                        <h3 className="text-xl font-bold mb-4 flex items-center">📟 İnterkomlar <span className="ml-3 text-xs bg-rose-500 text-white px-2 py-0.5 rounded-full">{intercoms.filter(i => !i.isWorking).length} Arıza</span></h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {intercoms.map(i => (
+                                <div key={i.intercomId} className={`glass p-4 rounded-xl border-l-4 ${i.isWorking ? 'border-emerald-500' : 'border-rose-500'}`}>
+                                    <div className="flex justify-between items-center"><h5 className="font-medium text-sm">Villa {i.villaId} - {i.intercomName}</h5><span className={`text-[10px] font-bold px-2 py-0.5 rounded ${i.isWorking ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>{i.isWorking ? 'AKTİF' : 'ARIZA'}</span></div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                </div>
+            </div>
+        );
+
+        const CargoPage = ({ cargos, companies }) => (
+            <div className="flex flex-col h-full animate-fade-in">
+                <div className="px-8 py-4 border-b border-white/5 flex justify-between items-center shrink-0 bg-slate-950/80 backdrop-blur-xl">
+                    <div>
+                        <h2 className="text-2xl font-bold">Kargo Trafiği</h2>
+                        <p className="text-slate-400 text-[10px] mt-1 font-mono uppercase tracking-widest">{cargos.length} aktif teslimat</p>
+                    </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-8 gap-4 grid grid-cols-1 pb-32">
+                    {cargos.map(c => (
+                        <div key={c.cargoId} className="glass p-4 rounded-xl flex items-center justify-between hover:bg-slate-800/40 transition-all">
+                            <div className="flex items-center space-x-4">
+                                <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center text-xl">📦</div>
+                                <div>
+                                    <h5 className="font-semibold text-sm">Villa {c.villaNo || c.villaId} - {c.date}</h5>
+                                    <p className="text-xs text-slate-500">Durum: {c.isCalled ? (c.isMissed ? '❌ Ulaşılamadı' : '✅ Teslim Edildi') : '⏳ Bekliyor'}</p>
+                                </div>
+                            </div>
+                            <div className="text-right text-[10px] text-slate-500 font-mono tracking-tighter"><p>Deneme: {c.callAttemptCount}</p></div>
+                        </div>
+                    ))}
+                    {cargos.length === 0 && <div className="p-20 text-center text-slate-500 italic">Henüz kargo kaydı bulunmuyor.</div>}
+                </div>
+            </div>
+        );
+
+        const LogPage = ({ devices }) => {
+            const [logs, setLogs] = useState([]);
+            const [filterLevel, setFilterLevel] = useState('ALL');
+            const [filterCategory, setFilterCategory] = useState('ALL');
+            const [isPaused, setIsPaused] = useState(false);
+            const [autoScroll, setAutoScroll] = useState(true);
+            const logContainerRef = React.useRef(null);
+
+            useEffect(() => {
+                fetch('/api/v1/logs').then(r => r.ok ? r.json() : []).then(data => setLogs(Array.isArray(data) ? data : [])).catch(() => {});
+            }, []);
+
+            useEffect(() => {
+                const ws = new WebSocket(`ws://${location.host}/ws/WEB_LOGS`);
+                ws.onmessage = (e) => {
+                    if (isPaused) return;
+                    try {
+                        const msg = JSON.parse(e.data);
+                        if (msg.type === 'SYSTEM_LOG' && msg.payload) {
+                            setLogs(prev => [...prev, msg.payload].slice(-500));
+                        }
+                    } catch(err) {}
+                };
+                return () => ws.close();
+            }, [isPaused]);
+
+            useEffect(() => {
+                if (autoScroll && logContainerRef.current) {
+                    logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+                }
+            }, [logs, autoScroll]);
+
+            const levelColors = {
+                'INFO': { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20', dot: 'bg-blue-400' },
+                'WARN': { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20', dot: 'bg-amber-400' },
+                'ERROR': { bg: 'bg-rose-500/10', text: 'text-rose-400', border: 'border-rose-500/20', dot: 'bg-rose-400' },
+                'SUCCESS': { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20', dot: 'bg-emerald-400' },
+            };
+            const categoryIcons = { 'CONNECT': '🔌', 'DISCONNECT': '⛓️‍💥', 'SYNC': '🔄', 'CRUD': '📝', 'SYSTEM': '⚙️', 'HTTP': '🌐' };
+
+            const filteredLogs = logs.filter(log => {
+                if (filterLevel !== 'ALL' && log.level !== filterLevel) return false;
+                if (filterCategory !== 'ALL' && log.category !== filterCategory) return false;
+                return true;
+            });
+
+            const formatTs = (ts) => { if (!ts) return '--:--:--'; return new Date(ts * 1000).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); };
+            const logCounts = { INFO: logs.filter(l => l.level === 'INFO').length, WARN: logs.filter(l => l.level === 'WARN').length, ERROR: logs.filter(l => l.level === 'ERROR').length, SUCCESS: logs.filter(l => l.level === 'SUCCESS').length };
+
+            return (
+                <div className="flex flex-col h-full animate-fade-in overflow-hidden">
+                     <div className="px-8 py-4 border-b border-white/5 shrink-0 bg-slate-950/80 backdrop-blur-xl">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h2 className="text-2xl font-bold">Sistem Logları</h2>
+                                <p className="text-slate-400 text-[10px] mt-1 font-mono uppercase tracking-widest">{devices.length} aktif cihaz · {logs.length} log kaydı</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {Object.entries(logCounts).map(([level, count]) => (
+                                    <button key={level} onClick={() => setFilterLevel(filterLevel === level ? 'ALL' : level)}
+                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${filterLevel === level ? `${levelColors[level].bg} ${levelColors[level].text} ${levelColors[level].border} ring-1 ring-offset-1 ring-offset-slate-950 ring-current` : 'border-slate-800 text-slate-500 hover:text-slate-300'}`}
+                                    >{level} ({count})</button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-3">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-slate-600 uppercase tracking-widest font-bold mr-1">Kategori:</span>
+                                {['ALL', 'CONNECT', 'DISCONNECT', 'SYNC', 'SYSTEM'].map(cat => (
+                                    <button key={cat} onClick={() => setFilterCategory(cat)}
+                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${filterCategory === cat ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'border-slate-800 text-slate-500 hover:text-slate-300'}`}
+                                    >{cat === 'ALL' ? '📋 Tümü' : `${categoryIcons[cat] || '📋'} ${cat}`}</button>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setAutoScroll(!autoScroll)} className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${autoScroll ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'border-slate-800 text-slate-500'}`}>{autoScroll ? '⬇️ Otomatik Kaydır' : '⏸️ Kaydırma Kapalı'}</button>
+                                <button onClick={() => setIsPaused(!isPaused)} className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${isPaused ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>{isPaused ? '⏸️ Duraklatıldı' : '▶️ Canlı'}</button>
+                                <button onClick={() => setLogs([])} className="px-3 py-1 rounded-lg text-[10px] font-bold border border-slate-800 text-slate-500 hover:text-rose-400 hover:border-rose-500/30 transition-all">🗑️ Temizle</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto p-8 pb-32">
+                        <section className="mb-8">
+                            <h3 className="text-lg font-bold mb-4 flex items-center text-slate-300"><span className="mr-2">📱</span> Bağlı Cihazlar <span className="ml-3 text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full animate-pulse">{devices.length} Online</span></h3>
+                            {devices.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {devices.map(d => (
+                                        <div key={d.deviceId} className="glass p-4 rounded-xl border-t border-emerald-500/30 hover:bg-slate-800/40 transition-all flex justify-between items-center group">
+                                            <div className="flex items-center space-x-3">
+                                                <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+                                                <div><h5 className="font-semibold text-sm text-slate-200 line-clamp-1">{d.deviceName}</h5><p className="text-[9px] text-slate-500 font-mono tracking-widest uppercase mt-0.5">ID: {d.deviceId.split('_').pop()}</p></div>
+                                            </div>
+                                            <div className="text-right"><p className="text-[10px] text-emerald-400/80 font-mono"><span className="opacity-0 group-hover:opacity-100 transition-opacity">Bağlandı: </span>{new Date(d.connectedAt * 1000).toLocaleTimeString()}</p></div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="glass p-6 rounded-xl border-t border-rose-500/30 text-center"><p className="text-slate-500 italic text-sm">Şu an aktif bir cihaz bağlantısı bulunmuyor.</p></div>
+                            )}
+                        </section>
+                        
+                        <section>
+                            <h3 className="text-lg font-bold mb-4 flex items-center text-slate-300"><span className="mr-2">⚡</span> Canlı Sistem Logları <span className="ml-3 text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2.5 py-0.5 rounded-full">{filteredLogs.length} kayıt</span></h3>
+                            <div ref={logContainerRef} className="glass rounded-xl p-1 font-mono text-xs bg-black/60 border-slate-800 overflow-y-auto" style={{ height: 'calc(100vh - 520px)', minHeight: '300px' }}>
+                                {filteredLogs.map((log, i) => {
+                                    const colors = levelColors[log.level] || levelColors['INFO'];
+                                    return (
+                                        <div key={i} className="py-2 px-3 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.03] transition-colors rounded flex items-start gap-3">
+                                            <span className={`shrink-0 w-1.5 h-1.5 rounded-full mt-1.5 ${colors.dot}`}></span>
+                                            <span className="text-slate-600 shrink-0 w-16">{formatTs(log.timestamp)}</span>
+                                            <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${colors.bg} ${colors.text} border ${colors.border} w-16 text-center`}>{log.level}</span>
+                                            <span className="shrink-0 text-slate-600 w-6 text-center">{categoryIcons[log.category] || '📋'}</span>
+                                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-800/50 text-slate-500 border border-slate-700/50 w-24 text-center">{log.category}</span>
+                                            <span className="text-slate-300 flex-1">{log.message}</span>
+                                            {log.details && <span className="text-slate-600 text-[10px] shrink-0 max-w-48 truncate" title={JSON.stringify(log.details)}>{JSON.stringify(log.details)}</span>}
+                                        </div>
+                                    );
+                                })}
+                                {filteredLogs.length === 0 && <div className="text-slate-600 italic px-4 py-12 text-center text-sm">{logs.length === 0 ? '🔇 Henüz sistem logu bulunmuyor. Cihaz bağlandığında veya veri değiştiğinde loglar burada görünecektir.' : '🔍 Seçili filtrelere uygun log kaydı bulunamadı.'}</div>}
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            );
+        };
+
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [stats, setStats] = useState({ villas: 0, contacts: 0, cargos: 0, cameras: 0, connectedDevices: 0 });
+            const [villas, setVillas] = useState([]);
+            const [contacts, setContacts] = useState([]);
+            const [cargos, setCargos] = useState([]);
+            const [companies, setCompanies] = useState([]);
+            const [cameras, setCameras] = useState([]);
+            const [intercoms, setIntercoms] = useState([]);
+            const [devices, setDevices] = useState([]);
+            const [syncActive, setSyncActive] = useState(true);
+            const [serverIp, setServerIp] = useState("");
+
+            const fetchData = async () => {
+                const endpoints = [
+                    { url: '/api/v1/stats', setter: setStats },
+                    { url: '/api/v1/villas', setter: setVillas },
+                    { url: '/api/v1/contacts', setter: setContacts },
+                    { url: '/api/v1/cargos', setter: setCargos },
+                    { url: '/api/v1/companies', setter: setCompanies },
+                    { url: '/api/v1/cameras', setter: setCameras },
+                    { url: '/api/v1/intercoms', setter: setIntercoms },
+                    { url: '/api/v1/devices', setter: setDevices },
+                    { url: '/api/v1/sync/status', setter: (data) => { setSyncActive(data.active); setServerIp(data.ip || ""); } }
+                ];
+                const results = await Promise.all(endpoints.map(ep => fetch(ep.url).then(r => r.ok ? r.json() : null)));
+                results.forEach((data, i) => { if(data) endpoints[i].setter(data); });
+            };
+
+            const toggleSync = async () => {
+                try {
+                    const res = await fetch('/api/v1/sync/toggle', { method: 'POST' });
+                    if(res.ok) {
+                        const data = await res.json();
+                        setSyncActive(data.active);
+                    }
+                } catch (e) { alert("Sunucuyla bağlantı kurulamadı!"); }
+            };
+
+            useEffect(() => {
+                fetchData();
+                const it = setInterval(fetchData, 4000);
+                return () => clearInterval(it);
+            }, []);
+
+            return (
+                <div className="flex h-screen w-screen bg-slate-950 text-slate-200 overflow-hidden">
+                    <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+                    <main className="flex-1 flex flex-col min-w-0 bg-slate-900/50">
+                        <header className="h-16 glass border-b border-slate-800 flex items-center justify-between px-8 shrink-0 relative z-50">
+                            <div className="text-xl font-bold uppercase tracking-tighter text-white/90 font-mono flex items-center">
+                                {activeTab}
+                                {serverIp && (
+                                    <span className="ml-4 px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-400 text-xs tracking-wider flex items-center">
+                                        <span className="mr-1">🌐</span> IP: {serverIp}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center space-x-4">
+                                <div className="flex items-center space-x-3 bg-slate-950/50 px-4 py-1.5 rounded-full border border-slate-800">
+                                    <div className="flex items-center space-x-2">
+                                        <div className={`w-2 h-2 rounded-full ${syncActive ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SENKRONİZASYON</span>
+                                    </div>
+                                    <button 
+                                        onClick={toggleSync}
+                                        className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${syncActive ? 'bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white' : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}
+                                    >
+                                        {syncActive ? 'DURDUR' : 'BAŞLAT'}
+                                    </button>
+                                </div>
+                                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-2.5 py-1 rounded-full border border-emerald-500/20">WEB AKTİF</span>
+                            </div>
+                        </header>
+                        <div className="flex-1 overflow-hidden">
+                            {activeTab === 'dashboard' && (
+                                <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fade-in h-full overflow-y-auto">
+                                    {[
+                                        { label: 'Villalar', val: stats.villas, icon: '🏡', tab: 'villas' },
+                                        { label: 'Kişiler', val: stats.contacts, icon: '👥', tab: 'contacts' },
+                                        { label: 'Kargo Trafiği', val: stats.cargos, icon: '📦', tab: 'cargos' },
+                                        { label: 'Cihaz Durumu', val: stats.connectedDevices, icon: '📱', tab: 'logs' }
+                                    ].map(s => (
+                                        <div 
+                                            key={s.label} 
+                                            onClick={() => setActiveTab(s.tab)}
+                                            className="glass p-6 rounded-2xl border-t-2 border-slate-700 hover:border-blue-500 hover:bg-slate-800/40 transition-all cursor-pointer group"
+                                        >
+                                            <div className="text-3xl mb-4 group-hover:scale-110 transition-transform inline-block">{s.icon}</div>
+                                            <div className="text-sm text-slate-400 font-medium uppercase tracking-[0.2em]">{s.label}</div>
+                                            <div className="text-4xl font-bold mt-2 tracking-tighter">{s.val}</div>
+                                            <div className="mt-4 text-[10px] text-blue-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center tracking-widest">
+                                                DETAYLARA GİT <span className="ml-2">→</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {activeTab === 'villas' && <VillaPage villas={villas} contacts={contacts} onUpdate={fetchData} />}
+                            {activeTab === 'contacts' && <ContactPage contacts={contacts} allVillas={villas} onUpdate={fetchData} />}
+                            {activeTab === 'cargos' && <CargoPage cargos={cargos} companies={companies} />}
+                            {activeTab === 'faults' && <FaultPage cameras={cameras} intercoms={intercoms} />}
+                            {activeTab === 'logs' && <LogPage devices={devices} />}
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

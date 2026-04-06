@@ -1,3 +1,17 @@
+import sys
+
+# --- EMERGENCY COMPATIBILITY GUARD ---
+try:
+    import fastapi
+    import uvicorn
+    import httpx
+    import websockets
+except ImportError as e:
+    print(f"\n[HATA] Kutuphane eksik: {e}")
+    print("Lütfen 'baslat.bat' calistirarak kurulumu tamamlayin veya 'pip install -r requirements.txt' komutunu calistirin.")
+    input("Kapatmak icin Enter'a basin...")
+    sys.exit(1)
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Request, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
@@ -15,12 +29,8 @@ import io
 import random
 from datetime import datetime
 import socket
-import sys
 import zipfile
-import io
-import httpx
 import shutil
-import os
 
 def get_local_ip():
     try:
@@ -39,6 +49,15 @@ logger = logging.getLogger("SecuAsistWeb")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "secuasist.db")
 INDEX_PATH = os.path.join(BASE_DIR, "templates", "index.html")
+
+# --- GLOBAL STATE ---
+connected_clients = {}  # DeviceId -> WebSocket
+web_log_clients = set() # Set of FastAPI WebSocket objects
+system_logs = []         # In-memory log buffer (last 500)
+START_TIME = time.time() # Server start time
+MAX_LOG_BUFFER = 500
+VERSION = "1.0.3"
+REPO_URL = "https://api.github.com/repos/serkantkn/SecuAsist-Server/releases/latest"
 
 app = FastAPI(title="SecuAsist Dashboard API")
 
@@ -224,17 +243,11 @@ def init_db():
     logger.info("✅ Database initialized successfully.")
 
 # Initialize on Import
-init_db()
-
-connected_clients = {} # DeviceId -> WebSocket
-web_log_clients = set() # Set of FastAPI WebSocket objects
-system_logs = [] # In-memory log buffer (last 500)
-START_TIME = time.time() # Server start time
-MAX_LOG_BUFFER = 500
-VERSION = "1.0.0"
-REPO_URL = "https://api.github.com/repos/serkantkn/SecuAsist-Server/releases/latest"
-
-import asyncio
+try:
+    init_db()
+except Exception as e:
+    logger.critical(f"FATAL: Database initialization failed: {e}")
+    sys.exit(1)
 
 def add_system_log(level, category, message, details=None):
     """Add a log entry to the in-memory buffer and broadcast to web clients."""
@@ -294,26 +307,41 @@ async def server_status_broadcaster():
             logger.error(f"Error in status broadcaster: {e}")
         await asyncio.sleep(10) # Send every 10 seconds
 
+async def run_manual_update_check() -> dict:
+    try:
+        logger.info("🔍 Checking for updates on GitHub...")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(REPO_URL, headers={"User-Agent": "SecuAsist-Server"})
+            logger.info(f"✅ GitHub response received: {response.status_code}")
+            if response.status_code == 200:
+                data = response.json()
+                raw_tag = data.get("tag_name", "")
+                latest_tag = raw_tag[1:] if raw_tag.startswith("v") else raw_tag
+                logger.info(f"📊 Version Comparison: Latest: {latest_tag} | Current: {VERSION}")
+                
+                if latest_tag and latest_tag > VERSION:
+                    zip_url = data.get("zipball_url")
+                    if zip_url:
+                        logger.warning(f"🚀 New version found: v{latest_tag}! Starting auto-update...")
+                        asyncio.create_task(perform_update(zip_url))
+                        return {"status": "updating", "version": latest_tag}
+                
+                logger.info("✅ System is already up to date.")
+                return {"status": "up-to-date", "version": VERSION}
+            elif response.status_code == 404:
+                logger.info("ℹ️ No stable release published yet (404).")
+                return {"status": "up-to-date", "version": VERSION, "message": "No stable release published yet."}
+            else:
+                logger.debug(f"Update check skipped ({response.status_code})")
+                return {"status": "error", "message": f"API HTTP {response.status_code}"}
+    except Exception as e:
+        logger.error(f"❌ Update check failed: {e}")
+        return {"status": "error", "message": str(e)}
+
 async def check_for_updates():
     """Periodically check GitHub for newer versions and perform auto-update."""
     while True:
-        try:
-            logger.info("🔍 Checking for updates on GitHub...")
-            async with httpx.AsyncClient() as client:
-                response = await client.get(REPO_URL, headers={"User-Agent": "SecuAsist-Server"})
-                if response.status_code == 200:
-                    data = response.json()
-                    latest_tag = data.get("tag_name", "").removePrefix("v")
-                    if latest_tag and latest_tag > VERSION:
-                        zip_url = data.get("zipball_url")
-                        if zip_url:
-                            logger.warn(f"🚀 New version found: v{latest_tag}! Starting auto-update...")
-                            await perform_update(zip_url)
-                else:
-                    logger.debug(f"Update check skipped ({response.status_code})")
-        except Exception as e:
-            logger.error(f"❌ Update check failed: {e}")
-        
+        await run_manual_update_check()
         await asyncio.sleep(3600) # Check every 1 hour
 
 async def perform_update(zip_url):
@@ -710,6 +738,48 @@ async def toggle_sync_server():
     else: await start_sync_server()
     return {"active": is_sync_running}
 
+# --- SYSTEM CONTROLS ---
+
+@app.get("/api/v1/server/export")
+async def export_database():
+    """Download the current sqlite database."""
+    return FileResponse(DB_PATH, media_type='application/octet-stream', filename='secuasist_backup.db')
+
+@app.post("/api/v1/server/import")
+async def import_database(file: UploadFile = File(...)):
+    """Upload a secuasist_backup.db to replace the current one, then restart the server."""
+    if not file.filename.endswith('.db'):
+        raise HTTPException(status_code=400, detail="Sadece .db uzantılı dosyalar yüklenebilir.")
+    
+    contents = await file.read()
+    with open(DB_PATH, 'wb') as f:
+        f.write(contents)
+        
+    logger.warning("✅ Database replaced via Web Import. Restarting server...")
+    
+    # Restart non-blocking to allow request to complete
+    def do_restart():
+        time.sleep(1)
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+    
+    asyncio.get_event_loop().run_in_executor(None, do_restart)
+    return {"status": "success", "message": "Veritabanı içe aktarıldı, sunucu yeniden başlatılıyor."}
+
+@app.post("/api/v1/server/restart")
+async def restart_server():
+    """Forcefully restarts the python process."""
+    logger.warning("♻️ Server restart requested from Web Panel.")
+    def do_restart():
+        time.sleep(1)
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+    asyncio.get_event_loop().run_in_executor(None, do_restart)
+    return {"status": "success", "message": "Sunucu yeniden başlatılıyor..."}
+
+@app.get("/api/v1/server/update/check")
+async def manual_update_check():
+    """Triggers the remote update process manually."""
+    return await run_manual_update_check()
+
 # --- BACKGROUND WS TASK ---
 
 @app.on_event("startup")
@@ -720,6 +790,13 @@ async def startup_event():
     logger.info(f"⚡ SecuAsist Server v{VERSION} Initialized.")
 
 if __name__ == "__main__":
-    import uvicorn
-    logger.info("⚡ Web Dashboard starting on port 8000")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    try:
+        import uvicorn
+        logger.info(f"🚀 SecuAsist Server v{VERSION} Starting...")
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+    except Exception as e:
+        logger.critical(f"❌ CRITICAL SERVER CRASH: {e}")
+        import traceback
+        traceback.print_exc()
+        input("\n[HATA] Sunucu baslatilamadi. Hatayi okuduktan sonra pencereyi kapatmak icin Enter'a basin...")
+        sys.exit(1)

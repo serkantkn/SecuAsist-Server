@@ -7,19 +7,81 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
-        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .sidebar-item-active { background: linear-gradient(90deg, #3b82f633 0%, #3b82f600 100%); border-left: 4px solid #3b82f6; }
+        :root {
+            --bg-primary: #030712;
+            --bg-secondary: #0f172a;
+            --bg-card: rgba(15, 23, 42, 0.6);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-violet: #8b5cf6;
+            --border: rgba(148, 163, 184, 0.08);
+        }
+        body { 
+            font-family: 'Inter', sans-serif; transition: background-color 0.4s ease; min-height: 100vh; 
+            background: var(--bg-primary); color: var(--text-primary);
+        }
+        
+        /* --- AMBIENT BACKGROUND --- */
+        .ambient {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 0; overflow: hidden;
+        }
+        .ambient .orb {
+            position: absolute; border-radius: 50%; filter: blur(120px); opacity: 0.12;
+            animation: float 20s ease-in-out infinite;
+        }
+        .ambient .orb:nth-child(1) { width: 600px; height: 600px; background: var(--accent-blue); top: -200px; left: -100px; animation-delay: 0s; }
+        .ambient .orb:nth-child(2) { width: 500px; height: 500px; background: var(--accent-violet); top: 40%; right: -150px; animation-delay: -7s; }
+        .ambient .orb:nth-child(3) { width: 400px; height: 400px; background: var(--accent-cyan); bottom: -100px; left: 30%; animation-delay: -14s; }
+        
+        .light .ambient .orb { opacity: 0.07; filter: blur(100px); }
+        .light body { background: #f8fafc; color: #1e293b; }
+        .light .ambient .orb:nth-child(1) { background: #3b82f6; }
+        .light .ambient .orb:nth-child(2) { background: #f97316; }
+        .light .ambient .orb:nth-child(3) { background: #06b6d4; }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -40px) scale(1.05); }
+            66% { transform: translate(-20px, 20px) scale(0.95); }
+        }
+
+        .glass { 
+            background: var(--bg-card); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border); box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2); 
+            transition: all 0.4s ease;
+        }
+        .glass:hover { transform: translateY(-2px); border-color: rgba(59, 130, 246, 0.2); }
+        .light .glass {
+            background: rgba(255, 255, 255, 0.7); border: 1px solid rgba(255, 255, 255, 1);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+        }
+
+        .sidebar-item-active { background: linear-gradient(90deg, rgba(59,130,246,0.1) 0%, transparent 100%); border-left: 4px solid var(--accent-blue); }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .grad-text {
+            background: linear-gradient(135deg, #f1f5f9 0%, #3b82f6 50%, #06b6d4 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .light .grad-text {
+            background: linear-gradient(135deg, #1e293b 0%, #3b82f6 50%, #f97316 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
     </style>
+
 </head>
-<body class="overflow-hidden">
+<body class="overflow-hidden  text-slate-800 dark: dark:text-slate-200">
+    <div class="ambient"><div class="orb"></div><div class="orb"></div><div class="orb"></div></div>
     <div id="root"></div>
 
     <script type="text/babel">
@@ -52,7 +114,7 @@
                     value={value || ''} 
                     onChange={e => onChange(e.target.value)}
                     placeholder={placeholder}
-                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                    className="w-full bg-white/50 dark:bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors"
                 />
             </div>
         );
@@ -79,15 +141,16 @@
                 { id: 'cargos', label: 'Kargolar', icon: '📦' },
                 { id: 'faults', label: 'Arızalar', icon: '🛠️' },
                 { id: 'logs', label: 'Sistem Logları', icon: '📜' },
+                { id: 'settings', label: 'Ayarlar', icon: '⚙️' },
             ];
 
             return (
-                <div className="w-64 h-screen glass border-r border-slate-700 flex flex-col shrink-0">
+                <div className="w-64 h-screen glass border-r border-slate-800/60 flex flex-col shrink-0">
                     <div className="p-6">
-                        <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent italic">SecuAsist</h1>
-                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-semibold flex items-center">
+                        <h1 className="text-xl font-bold grad-text text-2xl tracking-tight italic">SecuAsist</h1>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-widest font-semibold flex items-center">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
-                            Yönetim Merkezi v0.6
+                            Yönetim Merkezi v0.8
                         </p>
                     </div>
                     <nav className="flex-1 mt-4">
@@ -95,7 +158,7 @@
                             <button
                                 key={item.id}
                                 onClick={() => setActiveTab(item.id)}
-                                className={`w-full flex items-center px-6 py-4 text-sm transition-all ${activeTab === item.id ? 'sidebar-item-active text-blue-400 font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
+                                className={`w-full flex items-center px-6 py-4 text-sm transition-all ${activeTab === item.id ? 'sidebar-item-active text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5'}`}
                             >
                                 <span className="mr-3 text-lg">{item.icon}</span>
                                 {item.label}
@@ -118,7 +181,7 @@
             );
 
             const handleSave = async () => {
-                if (!editingVilla.villaNo) { alert("Villa No zorunludur!"); return; }
+                if (!editingVilla.villaNo) { globalShowToast("Villa No zorunludur!", "error"); return; }
                 try {
                     const data = { ...editingVilla, updatedAt: Date.now() };
                     const res = await fetch('/api/v1/villas', {
@@ -127,8 +190,8 @@
                         body: JSON.stringify(data)
                     });
                     if (res.ok) { onUpdate(); setEditingVilla(null); }
-                    else { const err = await res.json(); alert("Hata: " + JSON.stringify(err.detail)); }
-                } catch (e) { alert("Bağlantı hatası: " + e.message); }
+                    else { const err = await res.json(); globalShowToast("Hata: " + JSON.stringify(err.detail), "error"); }
+                } catch (e) { globalShowToast("Bağlantı hatası: " + e.message, "error"); }
             };
 
             const villaContacts = useMemo(() => {
@@ -190,7 +253,7 @@
 
             return (
                 <div className="flex flex-col h-full animate-fade-in">
-                    <div className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-xl px-8 py-4 border-b border-white/5 flex justify-between items-center shrink-0">
+                    <div className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-xl px-8 py-4 border-b border-slate-800/40 flex justify-between items-center shrink-0">
                         <div className="shrink-0 mr-8">
                             <h2 className="text-2xl font-bold">Villalar</h2>
                             <p className="text-slate-400 text-[10px] mt-1 font-mono uppercase tracking-widest">{villas.length} kayıtlı villa</p>
@@ -200,7 +263,7 @@
                                 <input 
                                     type="text" 
                                     placeholder="Villa veya sokak ara..." 
-                                    className="bg-slate-800/50 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm w-64 focus:border-blue-500 outline-none"
+                                    className="bg-white/50 dark:bg-slate-800/50 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm w-64 focus:border-blue-500 outline-none"
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}
                                 />
@@ -214,8 +277,8 @@
                                     const formData = new FormData();
                                     formData.append('file', file);
                                     const res = await fetch('/api/v1/import/villas', { method:'POST', body:formData });
-                                    if(res.ok) { const data = await res.json(); alert(`${data.count} villa başarıyla içe aktarıldı.`); onUpdate(); }
-                                    else { alert("Yükleme hatası!"); }
+                                    if(res.ok) { const data = await res.json(); globalShowToast(`${data.count} villa başarıyla içe aktarıldı.`, "success"); onUpdate(); }
+                                    else { globalShowToast("Yükleme hatası!", "error"); }
                                 }} />
                             </label>
                             <button onClick={() => setEditingVilla({ villaNo: '', villaStreet: '', deviceId: 'Sunucu' })} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition-all">+ Yeni Villa</button>
@@ -235,7 +298,7 @@
                                                 <div className="flex items-center space-x-1 animate-fade-in" onClick={e => e.stopPropagation()}>
                                                     <button onClick={async () => { 
                                                         const res = await fetch(`/api/v1/villas/${v.villaId}`, {method:'DELETE'}); 
-                                                        if(res.ok) { onUpdate(); setConfirmDeleteId(null); } else alert("Silme hatası!");
+                                                        if(res.ok) { onUpdate(); setConfirmDeleteId(null); } else globalShowToast("Silme hatası!", "error");
                                                     }} className="p-2 bg-rose-600 text-white rounded-lg text-[10px] font-bold">EVET</button>
                                                     <button onClick={() => setConfirmDeleteId(null)} className="p-2 bg-slate-700 text-white rounded-lg text-[10px] font-bold">İPTAL</button>
                                                 </div>
@@ -366,7 +429,7 @@
                                         <div className="p-4 glass rounded-xl space-y-3">
                                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Rehberden Kişi Ekle</p>
                                             <div className="flex gap-2">
-                                                <select className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500" onChange={(e) => {
+                                                <select className="flex-1 bg-slate-100 dark:bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500" onChange={(e) => {
                                                     const cid = e.target.value;
                                                     if(!cid) return;
                                                     const contact = contacts.find(c => c.contactId === parseInt(cid));
@@ -393,7 +456,7 @@
                             )}
 
                             <div className="pt-4 flex justify-end space-x-3">
-                                <button onClick={() => setEditingVilla(null)} className="px-6 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors border border-transparent">İptal</button>
+                                <button onClick={() => setEditingVilla(null)} className="px-6 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors border-transparent">İptal</button>
                                 <button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 px-8 py-2 rounded-lg text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all">DEĞİŞİKLİKLERİ KAYDET</button>
                             </div>
                         </div>
@@ -413,18 +476,18 @@
             );
 
             const handleSave = async () => {
-                if (!editingContact.contactName || !editingContact.contactPhone) { alert("İsim ve Telefon zorunludur!"); return; }
+                if (!editingContact.contactName || !editingContact.contactPhone) { globalShowToast("İsim ve Telefon zorunludur!", "error"); return; }
                 try {
                     const data = { ...editingContact, updatedAt: Date.now() };
                     const res = await fetch('/api/v1/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
                     if (res.ok) { onUpdate(); setEditingContact(null); }
-                    else { const err = await res.json(); alert("Kayıt hatası: " + JSON.stringify(err.detail)); }
-                } catch (e) { alert("Sunucuya ulaşılamıyor: " + e.message); }
+                    else { const err = await res.json(); globalShowToast("Kayıt hatası: " + JSON.stringify(err.detail), "error"); }
+                } catch (e) { globalShowToast("Sunucuya ulaşılamıyor: " + e.message, "error"); }
             };
 
             return (
                 <div className="flex flex-col h-full animate-fade-in">
-                    <div className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-xl px-8 py-4 border-b border-white/5 flex justify-between items-center shrink-0">
+                    <div className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-xl px-8 py-4 border-b border-slate-800/40 flex justify-between items-center shrink-0">
                         <div>
                             <h2 className="text-2xl font-bold">Kişi Rehberi</h2>
                             <p className="text-slate-400 text-[10px] mt-1 font-mono uppercase tracking-widest">{filtered.length} kayıt listeleniyor</p>
@@ -438,7 +501,7 @@
                     <div className="flex-1 overflow-y-auto p-8 pb-32">
                         <div className="glass rounded-2xl overflow-hidden">
                             <table className="w-full text-left text-sm">
-                                <thead className="sticky top-0 z-10 bg-slate-900 shadow-sm shadow-black/20">
+                                <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-900 shadow-sm shadow-black/20">
                                     <tr className="border-b border-slate-700">
                                         <th className="px-6 py-4 font-semibold text-slate-400">İsim</th>
                                         <th className="px-6 py-4 font-semibold text-slate-400">Telefon</th>
@@ -457,7 +520,7 @@
                                                     <div className="flex items-center justify-end space-x-1">
                                                         <button onClick={async () => { 
                                                             const res = await fetch(`/api/v1/contacts/${c.contactId}`, {method:'DELETE'}); 
-                                                            if(res.ok) { onUpdate(); setConfirmDeleteId(null); } else alert("Hata!");
+                                                            if(res.ok) { onUpdate(); setConfirmDeleteId(null); } else globalShowToast("Hata!", "error");
                                                         }} className="px-2 py-1 bg-rose-600 text-white rounded text-[10px] font-bold">SİL</button>
                                                         <button onClick={() => setConfirmDeleteId(null)} className="px-2 py-1 bg-slate-700 text-white rounded text-[10px] font-bold">X</button>
                                                     </div>
@@ -482,7 +545,7 @@
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">İlgili Villa</label>
                                 <select 
-                                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                                    className="w-full bg-white/50 dark:bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors"
                                     value={editingContact?.villaId || ''}
                                     onChange={e => setEditingContact({...editingContact, villaId: e.target.value ? parseInt(e.target.value) : null})}
                                 >
@@ -500,7 +563,7 @@
 
         const FaultPage = ({ cameras, intercoms }) => (
             <div className="flex flex-col h-full animate-fade-in">
-                <div className="px-8 py-4 border-b border-white/5 shrink-0 bg-slate-950/80 backdrop-blur-xl">
+                <div className="px-8 py-4 border-b border-slate-800/40 shrink-0 bg-slate-950/80 backdrop-blur-xl">
                     <h2 className="text-2xl font-bold">Sistem Sağlık Durumu</h2>
                     <p className="text-slate-400 text-[10px] mt-1 font-mono uppercase tracking-widest">Canlı cihaz izleme</p>
                 </div>
@@ -535,7 +598,7 @@
 
         const CargoPage = ({ cargos, companies }) => (
             <div className="flex flex-col h-full animate-fade-in">
-                <div className="px-8 py-4 border-b border-white/5 flex justify-between items-center shrink-0 bg-slate-950/80 backdrop-blur-xl">
+                <div className="px-8 py-4 border-b border-slate-800/40 flex justify-between items-center shrink-0 bg-slate-950/80 backdrop-blur-xl">
                     <div>
                         <h2 className="text-2xl font-bold">Kargo Trafiği</h2>
                         <p className="text-slate-400 text-[10px] mt-1 font-mono uppercase tracking-widest">{cargos.length} aktif teslimat</p>
@@ -610,7 +673,7 @@
 
             return (
                 <div className="flex flex-col h-full animate-fade-in overflow-hidden">
-                     <div className="px-8 py-4 border-b border-white/5 shrink-0 bg-slate-950/80 backdrop-blur-xl">
+                     <div className="px-8 py-4 border-b border-slate-800/40 shrink-0 bg-slate-950/80 backdrop-blur-xl">
                         <div className="flex justify-between items-start">
                             <div>
                                 <h2 className="text-2xl font-bold">Sistem Logları</h2>
@@ -619,7 +682,7 @@
                             <div className="flex items-center gap-2">
                                 {Object.entries(logCounts).map(([level, count]) => (
                                     <button key={level} onClick={() => setFilterLevel(filterLevel === level ? 'ALL' : level)}
-                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${filterLevel === level ? `${levelColors[level].bg} ${levelColors[level].text} ${levelColors[level].border} ring-1 ring-offset-1 ring-offset-slate-950 ring-current` : 'border-slate-800 text-slate-500 hover:text-slate-300'}`}
+                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${filterLevel === level ? `${levelColors[level].bg} ${levelColors[level].text} ${levelColors[level].border} ring-1 ring-offset-1 ring-offset-slate-950 ring-current` : 'border-slate-800/60 text-slate-500 hover:text-slate-300'}`}
                                     >{level} ({count})</button>
                                 ))}
                             </div>
@@ -629,14 +692,14 @@
                                 <span className="text-[10px] text-slate-600 uppercase tracking-widest font-bold mr-1">Kategori:</span>
                                 {['ALL', 'CONNECT', 'DISCONNECT', 'SYNC', 'SYSTEM'].map(cat => (
                                     <button key={cat} onClick={() => setFilterCategory(cat)}
-                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${filterCategory === cat ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'border-slate-800 text-slate-500 hover:text-slate-300'}`}
+                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${filterCategory === cat ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'border-slate-800/60 text-slate-500 hover:text-slate-300'}`}
                                     >{cat === 'ALL' ? '📋 Tümü' : `${categoryIcons[cat] || '📋'} ${cat}`}</button>
                                 ))}
                             </div>
                             <div className="flex items-center gap-2">
-                                <button onClick={() => setAutoScroll(!autoScroll)} className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${autoScroll ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'border-slate-800 text-slate-500'}`}>{autoScroll ? '⬇️ Otomatik Kaydır' : '⏸️ Kaydırma Kapalı'}</button>
+                                <button onClick={() => setAutoScroll(!autoScroll)} className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${autoScroll ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'border-slate-800/60 text-slate-500'}`}>{autoScroll ? '⬇️ Otomatik Kaydır' : '⏸️ Kaydırma Kapalı'}</button>
                                 <button onClick={() => setIsPaused(!isPaused)} className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${isPaused ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>{isPaused ? '⏸️ Duraklatıldı' : '▶️ Canlı'}</button>
-                                <button onClick={() => setLogs([])} className="px-3 py-1 rounded-lg text-[10px] font-bold border border-slate-800 text-slate-500 hover:text-rose-400 hover:border-rose-500/30 transition-all">🗑️ Temizle</button>
+                                <button onClick={() => setLogs([])} className="px-3 py-1 rounded-lg text-[10px] font-bold border border-slate-800/60 text-slate-500 hover:text-rose-400 hover:border-rose-500/30 transition-all">🗑️ Temizle</button>
                             </div>
                         </div>
                     </div>
@@ -663,7 +726,7 @@
                         
                         <section>
                             <h3 className="text-lg font-bold mb-4 flex items-center text-slate-300"><span className="mr-2">⚡</span> Canlı Sistem Logları <span className="ml-3 text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2.5 py-0.5 rounded-full">{filteredLogs.length} kayıt</span></h3>
-                            <div ref={logContainerRef} className="glass rounded-xl p-1 font-mono text-xs bg-black/60 border-slate-800 overflow-y-auto" style={{ height: 'calc(100vh - 520px)', minHeight: '300px' }}>
+                            <div ref={logContainerRef} className="glass rounded-xl p-1 font-mono text-xs bg-black/60 border-slate-800/60 overflow-y-auto" style={{ height: 'calc(100vh - 520px)', minHeight: '300px' }}>
                                 {filteredLogs.map((log, i) => {
                                     const colors = levelColors[log.level] || levelColors['INFO'];
                                     return (
@@ -672,7 +735,7 @@
                                             <span className="text-slate-600 shrink-0 w-16">{formatTs(log.timestamp)}</span>
                                             <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${colors.bg} ${colors.text} border ${colors.border} w-16 text-center`}>{log.level}</span>
                                             <span className="shrink-0 text-slate-600 w-6 text-center">{categoryIcons[log.category] || '📋'}</span>
-                                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-800/50 text-slate-500 border border-slate-700/50 w-24 text-center">{log.category}</span>
+                                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-white/50 dark:bg-slate-800/50 text-slate-500 border border-slate-700/50 w-24 text-center">{log.category}</span>
                                             <span className="text-slate-300 flex-1">{log.message}</span>
                                             {log.details && <span className="text-slate-600 text-[10px] shrink-0 max-w-48 truncate" title={JSON.stringify(log.details)}>{JSON.stringify(log.details)}</span>}
                                         </div>
@@ -687,7 +750,134 @@
         };
 
 
+        
+        const SettingsPage = ({ theme, setTheme }) => {
+            const handleExport = () => {
+                window.location.href = '/api/v1/server/export';
+            };
+            const handleImport = async (e) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const res = await fetch('/api/v1/server/import', {method: 'POST', body: formData});
+                    if(res.ok) {
+                        globalShowToast("Veritabanı yüklendi. Sunucu 2 sn içinde yeniden başlatılacak!", "success");
+                        setTimeout(() => window.location.reload(), 3000);
+                    } else globalShowToast("Yükleme başarısız!", "error");
+                } catch(err) { globalShowToast("Hata!", "error"); }
+            };
+            const handleRestart = () => {
+                globalShowConfirm("Sunucuyu yeniden başlatmak istediğinize emin misiniz? İşlem sırasında anlık kopmalar yaşanabilir.", async () => {
+                    try {
+                        const res = await fetch('/api/v1/server/restart', {method: 'POST'});
+                        if(res.ok) {
+                            globalShowToast("Yeniden başlatma komutu gönderildi.", "success");
+                            setTimeout(() => window.location.reload(), 3000);
+                        }
+                    } catch(e) {}
+                });
+            };
+            const handleUpdateCheck = async () => {
+                globalShowToast("Güncellemeler denetleniyor, lütfen bekleyin...", "info");
+                try {
+                    const res = await fetch('/api/v1/server/update/check');
+                    const data = await res.json();
+                    if(data.status === 'updating') globalShowToast(`Yeni sürüm (v${data.version}) bulunuyor. Lütfen bekleyin.`, "success");
+                    else if(data.status === 'up-to-date') globalShowToast("Sistem güncel.", "success");
+                    else globalShowToast("Güncelleme hatası: " + data.message, "error");
+                } catch(e) {
+                    globalShowToast("Sunucuya ulaşılamadı. Yeniden deneyin.", "error");
+                }
+            };
+
+            return (
+                <div className="flex flex-col h-full animate-fade-in">
+                    <div className="px-8 py-4 border-b border-slate-800/40 shrink-0   backdrop-blur-xl">
+                        <h2 className="text-2xl font-bold dark:text-white text-slate-800">Sistem Ayarları</h2>
+                        <p className="text-slate-500 text-[10px] mt-1 font-mono uppercase tracking-widest">Tema, Yedekleme ve Sunucu Kontrolü</p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-8 space-y-8 pb-32">
+                        <section className="glass p-6 rounded-2xl">
+                            <h3 className="text-lg font-bold mb-4 flex items-center"><span className="mr-3">🎨</span> Cihaz Teması</h3>
+                            <div className="flex items-center space-x-4">
+                                <button onClick={() => {setTheme('light'); localStorage.setItem('theme','light');}} className={`px-6 py-2 rounded-xl text-sm font-bold border transition-all ${theme === 'light' ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/30' : 'glass hover:bg-black/5 dark:hover:bg-white/5 border-transparent'}`}>Aydınlık (Light)</button>
+                                <button onClick={() => {setTheme('dark'); localStorage.setItem('theme','dark');}} className={`px-6 py-2 rounded-xl text-sm font-bold border transition-all ${theme === 'dark' ? 'bg-slate-800 text-white border-slate-700 shadow-lg shadow-black/30' : 'glass hover:bg-black/5 dark:hover:bg-white/5 border-transparent'}`}>Karanlık (Dark)</button>
+                            </div>
+                        </section>
+                        <section className="glass p-6 rounded-2xl">
+                            <h3 className="text-lg font-bold mb-4 flex items-center"><span className="mr-3">💾</span> Veritabanı ve Yedekleme</h3>
+                            <div className="flex flex-col md:flex-row gap-4">
+                                <button onClick={handleExport} className="flex-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white px-6 py-4 rounded-xl font-bold transition-all flex items-center justify-center border border-emerald-500/20"><span className="mr-2">📥</span> Yedeği İndir (Export)</button>
+                                <label className="flex-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-white px-6 py-4 rounded-xl font-bold transition-all flex items-center justify-center cursor-pointer border border-amber-500/20"><span className="mr-2">📤</span> Yedeği Yükle (Import)<input type="file" className="hidden" accept=".db" onChange={handleImport} /></label>
+                            </div>
+                        </section>
+                        <section className="glass p-6 rounded-2xl">
+                            <h3 className="text-lg font-bold mb-4 flex items-center text-rose-600 dark:text-rose-400"><span className="mr-3">⚙️</span> Gelişmiş Sunucu Kontrolü</h3>
+                            <div className="flex flex-col md:flex-row gap-4">
+                                <button onClick={handleUpdateCheck} className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-6 py-4 rounded-xl font-bold transition-all shadow-lg shadow-blue-500/20">🔄 Güncellemeleri Denetle</button>
+                                <button onClick={handleRestart} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white px-6 py-4 rounded-xl font-bold transition-all shadow-lg shadow-rose-500/20">♻️ Sunucuyu Yeniden Başlat</button>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            );
+        };
+        
+        
+        // --- GLOBAL DIALOG SYSTEM ---
+        let globalShowToast = (msg, type = 'info') => {};
+        let globalShowConfirm = (msg, onConfirm) => {};
+
+        const SystemDialogs = ({ toast, setToast, confirmDialog, setConfirmDialog }) => {
+            return (
+                <>
+                    {/* Toast */}
+                    {toast && (
+                        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] animate-fade-in">
+                            <div className={`glass px-6 py-3 rounded-full shadow-2xl border flex items-center space-x-3 
+                                ${toast.type === 'error' ? 'border-rose-500/50 bg-rose-500/10 text-rose-100' : 
+                                  toast.type === 'success' ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-100' :
+                                  'border-blue-500/50 bg-blue-500/10 text-blue-100'}`}
+                            >
+                                <span>{toast.type === 'error' ? '❌' : toast.type === 'success' ? '✅' : 'ℹ️'}</span>
+                                <span className="font-semibold text-sm">{toast.msg}</span>
+                                <button onClick={() => setToast(null)} className="ml-4 opacity-70 hover:opacity-100">✕</button>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Confirm Modal */}
+                    {confirmDialog && (
+                        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+                            <div className="glass p-8 rounded-2xl max-w-sm w-full shadow-2xl border border-slate-800/40 mx-4">
+                                <h3 className="text-xl font-bold text-white mb-4">⚠️ Onay Bekleniyor</h3>
+                                <p className="text-slate-300 text-sm mb-6 leading-relaxed">{confirmDialog.msg}</p>
+                                <div className="flex justify-end gap-3">
+                                    <button onClick={() => setConfirmDialog(null)} className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-300 hover:bg-white/10 transition-all border-transparent">Vazgeç</button>
+                                    <button onClick={() => { confirmDialog.onConfirm(); setConfirmDialog(null); }} className="px-5 py-2.5 rounded-xl text-sm font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-500/30 transition-all">Onayla</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </>
+            );
+        };
+
         const App = () => {
+            const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+
+            const [toast, setToast] = useState(null);
+            const [confirmDialog, setConfirmDialog] = useState(null);
+            
+            React.useEffect(() => {
+                globalShowToast = (msg, type = 'info') => {
+                    setToast({ msg, type });
+                    setTimeout(() => setToast(null), 4000);
+                };
+                globalShowConfirm = (msg, onConfirm) => setConfirmDialog({ msg, onConfirm });
+            }, []);
             const [activeTab, setActiveTab] = useState('dashboard');
             const [stats, setStats] = useState({ villas: 0, contacts: 0, cargos: 0, cameras: 0, connectedDevices: 0 });
             const [villas, setVillas] = useState([]);
@@ -723,7 +913,7 @@
                         const data = await res.json();
                         setSyncActive(data.active);
                     }
-                } catch (e) { alert("Sunucuyla bağlantı kurulamadı!"); }
+                } catch (e) { globalShowToast("Sunucuyla bağlantı kurulamadı!", "error"); }
             };
 
             useEffect(() => {
@@ -733,11 +923,13 @@
             }, []);
 
             return (
-                <div className="flex h-screen w-screen bg-slate-950 text-slate-200 overflow-hidden">
+                <>
+                <SystemDialogs toast={toast} setToast={setToast} confirmDialog={confirmDialog} setConfirmDialog={setConfirmDialog} />
+                <div className={`flex h-screen w-screen overflow-hidden ${theme} transition-colors`}>
                     <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-                    <main className="flex-1 flex flex-col min-w-0 bg-slate-900/50">
-                        <header className="h-16 glass border-b border-slate-800 flex items-center justify-between px-8 shrink-0 relative z-50">
-                            <div className="text-xl font-bold uppercase tracking-tighter text-white/90 font-mono flex items-center">
+                    <main className="flex-1 flex flex-col min-w-0 ">
+                        <header className="h-16 glass border-b border-slate-800/60 flex items-center justify-between px-8 shrink-0 relative z-50">
+                            <div className="text-xl font-bold uppercase tracking-tighter text-slate-800 dark:text-slate-200 font-mono flex items-center">
                                 {activeTab}
                                 {serverIp && (
                                     <span className="ml-4 px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-400 text-xs tracking-wider flex items-center">
@@ -746,7 +938,7 @@
                                 )}
                             </div>
                             <div className="flex items-center space-x-4">
-                                <div className="flex items-center space-x-3 bg-slate-950/50 px-4 py-1.5 rounded-full border border-slate-800">
+                                <div className="flex items-center space-x-3 bg-black/5 dark:bg-slate-950/50 px-4 py-1.5 rounded-full border border-slate-800/60">
                                     <div className="flex items-center space-x-2">
                                         <div className={`w-2 h-2 rounded-full ${syncActive ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SENKRONİZASYON</span>
@@ -790,9 +982,11 @@
                             {activeTab === 'cargos' && <CargoPage cargos={cargos} companies={companies} />}
                             {activeTab === 'faults' && <FaultPage cameras={cameras} intercoms={intercoms} />}
                             {activeTab === 'logs' && <LogPage devices={devices} />}
+                            {activeTab === 'settings' && <SettingsPage theme={theme} setTheme={setTheme} />}
                         </div>
                     </main>
                 </div>
+                </>
             );
         };
 

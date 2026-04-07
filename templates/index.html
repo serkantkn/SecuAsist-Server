@@ -131,26 +131,140 @@
             </div>
         );
 
+        // --- KURULUM SİHİRBAZI ---
+
+        const SetupWizard = ({ onComplete }) => {
+            const [step, setStep] = useState(1);
+            const [projectType, setProjectType] = useState(null);
+            const [siteName, setSiteName] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const projectOptions = [
+                { id: 'VILLA', label: 'Villa Sitesi', icon: '🏡', desc: 'Villalardan oluşan konut siteleri için', color: 'emerald' },
+                { id: 'BLOCK', label: 'Blok Sitesi', icon: '🏢', desc: 'Blok, kat ve dairelerden oluşan siteler için', color: 'blue' },
+                { id: 'MALL', label: 'AVM / İş Merkezi', icon: '🏬', desc: 'Mağaza ve ofislerden oluşan ticari yapılar için', color: 'violet' },
+            ];
+
+            const handleFinish = async () => {
+                if (!projectType || !siteName.trim()) { globalShowToast('Lütfen tüm alanları doldurun.', 'error'); return; }
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/v1/setup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ project_type: projectType, site_name: siteName.trim() })
+                    });
+                    if (res.ok) {
+                        const config = await res.json();
+                        globalShowToast('Kurulum başarıyla tamamlandı!', 'success');
+                        onComplete(config);
+                    } else {
+                        globalShowToast('Kurulum sırasında bir hata oluştu.', 'error');
+                    }
+                } catch (e) { globalShowToast('Sunucuya ulaşılamadı.', 'error'); }
+                setLoading(false);
+            };
+
+            return (
+                <div className="flex items-center justify-center h-screen w-screen animate-fade-in">
+                    <div className="glass rounded-3xl p-10 max-w-2xl w-full mx-4 shadow-2xl border border-slate-700/50">
+                        {/* Header */}
+                        <div className="text-center mb-10">
+                            <h1 className="text-4xl font-black grad-text mb-3">SecuAsist</h1>
+                            <p className="text-slate-400 text-sm">Güvenlik Yönetim Platformunu Yapılandırın</p>
+                            <div className="flex justify-center mt-6 space-x-3">
+                                <div className={`w-10 h-1.5 rounded-full transition-all ${step >= 1 ? 'bg-blue-500' : 'bg-slate-700'}`}></div>
+                                <div className={`w-10 h-1.5 rounded-full transition-all ${step >= 2 ? 'bg-blue-500' : 'bg-slate-700'}`}></div>
+                            </div>
+                        </div>
+
+                        {/* Adım 1: Proje Tipi */}
+                        {step === 1 && (
+                            <div className="animate-fade-in">
+                                <h2 className="text-lg font-bold mb-1">Yönetim Alanı Seçin</h2>
+                                <p className="text-slate-500 text-xs mb-6">SecuAsist hangi tür yapıda kullanılacak?</p>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {projectOptions.map(opt => (
+                                        <button key={opt.id} onClick={() => setProjectType(opt.id)}
+                                            className={`p-6 rounded-2xl text-left transition-all border-2 hover:scale-[1.02] ${
+                                                projectType === opt.id 
+                                                    ? `border-${opt.color}-500 bg-${opt.color}-500/10 shadow-lg shadow-${opt.color}-500/10` 
+                                                    : 'border-slate-700/50 hover:border-slate-600 bg-slate-800/30'
+                                            }`}
+                                        >
+                                            <div className="text-3xl mb-3">{opt.icon}</div>
+                                            <div className="font-bold text-sm">{opt.label}</div>
+                                            <div className="text-[11px] text-slate-400 mt-1 leading-relaxed">{opt.desc}</div>
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="flex justify-end mt-8">
+                                    <button onClick={() => { if (projectType) setStep(2); else globalShowToast('Lütfen bir alan seçin.', 'error'); }}
+                                        className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-500/20"
+                                    >Devam →</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Adım 2: Site Adı */}
+                        {step === 2 && (
+                            <div className="animate-fade-in">
+                                <h2 className="text-lg font-bold mb-1">Site / Tesis Bilgileri</h2>
+                                <p className="text-slate-500 text-xs mb-6">Bu bilgi panelde ve raporlarda görünecektir.</p>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-400 uppercase tracking-wider block mb-1">Site Adı</label>
+                                        <input type="text" value={siteName} onChange={e => setSiteName(e.target.value)}
+                                            placeholder="Örn: Güneşpark Villaları, Maviş AVM"
+                                            className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                                        />
+                                    </div>
+                                    <div className="glass rounded-xl p-4 mt-4">
+                                        <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Seçilen Mod</div>
+                                        <div className="flex items-center">
+                                            <span className="text-2xl mr-3">{projectOptions.find(o => o.id === projectType)?.icon}</span>
+                                            <span className="font-bold">{projectOptions.find(o => o.id === projectType)?.label}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex justify-between mt-8">
+                                    <button onClick={() => setStep(1)}
+                                        className="px-6 py-3 text-slate-400 hover:text-white text-sm font-bold transition-all"
+                                    >← Geri</button>
+                                    <button onClick={handleFinish} disabled={loading}
+                                        className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                                    >{loading ? 'Kuruluyor...' : '✓ Kurulumu Tamamla'}</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
         // --- PAGE COMPONENTS ---
 
-        const Sidebar = ({ activeTab, setActiveTab }) => {
-            const items = [
-                { id: 'dashboard', label: 'Panel', icon: '📊' },
-                { id: 'villas', label: 'Villalar', icon: '🏡' },
-                { id: 'contacts', label: 'Kişiler', icon: '👥' },
-                { id: 'cargos', label: 'Kargolar', icon: '📦' },
-                { id: 'faults', label: 'Arızalar', icon: '🛠️' },
-                { id: 'logs', label: 'Sistem Logları', icon: '📜' },
-                { id: 'settings', label: 'Ayarlar', icon: '⚙️' },
+        const Sidebar = ({ activeTab, setActiveTab, config }) => {
+            const allItems = [
+                { id: 'dashboard', label: 'Panel', icon: '📊', module: null },
+                { id: 'villas', label: config?.unit_label_plural || 'Villalar', icon: config?.project_type === 'MALL' ? '🏬' : config?.project_type === 'BLOCK' ? '🏢' : '🏡', module: 'units' },
+                { id: 'contacts', label: 'Kişiler', icon: '👥', module: 'contacts' },
+                { id: 'cargos', label: 'Kargolar', icon: '📦', module: 'cargos' },
+                { id: 'faults', label: 'Arızalar', icon: '🛠️', module: 'cameras' },
+                { id: 'logs', label: 'Sistem Logları', icon: '📜', module: null },
+                { id: 'settings', label: 'Ayarlar', icon: '⚙️', module: null },
             ];
+
+            const modules = config?.modules || ['units', 'contacts', 'cargos', 'cameras', 'intercoms'];
+            const items = allItems.filter(item => item.module === null || modules.includes(item.module));
 
             return (
                 <div className="w-64 h-screen glass border-r border-slate-800/60 flex flex-col shrink-0">
                     <div className="p-6">
-                        <h1 className="text-xl font-bold grad-text text-2xl tracking-tight italic">SecuAsist</h1>
+                        <h1 className="text-xl font-bold grad-text text-2xl tracking-tight italic">{config?.site_name || 'SecuAsist'}</h1>
                         <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-widest font-semibold flex items-center">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
-                            Yönetim Merkezi v0.8
+                            {config?.label || 'Yönetim Merkezi'}
                         </p>
                     </div>
                     <nav className="flex-1 mt-4">
@@ -867,6 +981,8 @@
 
         const App = () => {
             const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+            const [projectConfig, setProjectConfig] = useState(null); // null = yükleniyor
+            const [isConfigured, setIsConfigured] = useState(null); // null = bilinmiyor
 
             const [toast, setToast] = useState(null);
             const [confirmDialog, setConfirmDialog] = useState(null);
@@ -878,8 +994,22 @@
                 };
                 globalShowConfirm = (msg, onConfirm) => setConfirmDialog({ msg, onConfirm });
             }, []);
+
+            // İlk açılışta config kontrolü
+            useEffect(() => {
+                fetch('/api/v1/config').then(r => r.json()).then(config => {
+                    setProjectConfig(config);
+                    setIsConfigured(config.is_configured === true);
+                }).catch(() => setIsConfigured(false));
+            }, []);
+
+            const handleSetupComplete = (config) => {
+                setProjectConfig(config);
+                setIsConfigured(true);
+            };
+
             const [activeTab, setActiveTab] = useState('dashboard');
-            const [stats, setStats] = useState({ villas: 0, contacts: 0, cargos: 0, cameras: 0, connectedDevices: 0 });
+            const [stats, setStats] = useState({ units: 0, contacts: 0, cargos: 0, cameras: 0, connectedDevices: 0 });
             const [villas, setVillas] = useState([]);
             const [contacts, setContacts] = useState([]);
             const [cargos, setCargos] = useState([]);
@@ -892,7 +1022,7 @@
 
             const fetchData = async () => {
                 const endpoints = [
-                    { url: '/api/v1/stats', setter: setStats },
+                    { url: '/api/v1/stats', setter: (data) => { setStats(data); if(data.config) setProjectConfig(data.config); } },
                     { url: '/api/v1/villas', setter: setVillas },
                     { url: '/api/v1/contacts', setter: setContacts },
                     { url: '/api/v1/cargos', setter: setCargos },
@@ -917,20 +1047,59 @@
             };
 
             useEffect(() => {
-                fetchData();
-                const it = setInterval(fetchData, 4000);
-                return () => clearInterval(it);
-            }, []);
+                if (isConfigured) {
+                    fetchData();
+                    const it = setInterval(fetchData, 4000);
+                    return () => clearInterval(it);
+                }
+            }, [isConfigured]);
+
+            // Yükleme ekranı
+            if (isConfigured === null) {
+                return (
+                    <div className={`flex items-center justify-center h-screen w-screen ${theme}`}>
+                        <SystemDialogs toast={toast} setToast={setToast} confirmDialog={confirmDialog} setConfirmDialog={setConfirmDialog} />
+                        <div className="text-center animate-fade-in">
+                            <div className="text-4xl mb-4">⏳</div>
+                            <div className="text-slate-400 text-sm">Sunucu yapılandırması kontrol ediliyor...</div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Kurulum sihirbazı
+            if (!isConfigured) {
+                return (
+                    <div className={`${theme}`}>
+                        <SystemDialogs toast={toast} setToast={setToast} confirmDialog={confirmDialog} setConfirmDialog={setConfirmDialog} />
+                        <SetupWizard onComplete={handleSetupComplete} />
+                    </div>
+                );
+            }
+
+            // Moda göre dashboard kartlarını oluştur
+            const modules = projectConfig?.modules || ['units', 'contacts', 'cargos', 'cameras', 'intercoms'];
+            const unitLabel = projectConfig?.unit_label_plural || 'Villalar';
+            const unitIcon = projectConfig?.project_type === 'MALL' ? '🏬' : projectConfig?.project_type === 'BLOCK' ? '🏢' : '🏡';
+            
+            const dashboardCards = [
+                { label: unitLabel, val: stats.units, icon: unitIcon, tab: 'villas' },
+                { label: 'Kişiler', val: stats.contacts, icon: '👥', tab: 'contacts' },
+            ];
+            if (modules.includes('cargos')) {
+                dashboardCards.push({ label: 'Kargo Trafiği', val: stats.cargos, icon: '📦', tab: 'cargos' });
+            }
+            dashboardCards.push({ label: 'Cihaz Durumu', val: stats.connectedDevices, icon: '📱', tab: 'logs' });
 
             return (
                 <>
                 <SystemDialogs toast={toast} setToast={setToast} confirmDialog={confirmDialog} setConfirmDialog={setConfirmDialog} />
                 <div className={`flex h-screen w-screen overflow-hidden ${theme} transition-colors`}>
-                    <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+                    <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} config={projectConfig} />
                     <main className="flex-1 flex flex-col min-w-0 ">
                         <header className="h-16 glass border-b border-slate-800/60 flex items-center justify-between px-8 shrink-0 relative z-50">
                             <div className="text-xl font-bold uppercase tracking-tighter text-slate-800 dark:text-slate-200 font-mono flex items-center">
-                                {activeTab}
+                                {activeTab === 'villas' ? unitLabel : activeTab}
                                 {serverIp && (
                                     <span className="ml-4 px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-400 text-xs tracking-wider flex items-center">
                                         <span className="mr-1">🌐</span> IP: {serverIp}
@@ -955,13 +1124,8 @@
                         </header>
                         <div className="flex-1 overflow-hidden">
                             {activeTab === 'dashboard' && (
-                                <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fade-in h-full overflow-y-auto">
-                                    {[
-                                        { label: 'Villalar', val: stats.villas, icon: '🏡', tab: 'villas' },
-                                        { label: 'Kişiler', val: stats.contacts, icon: '👥', tab: 'contacts' },
-                                        { label: 'Kargo Trafiği', val: stats.cargos, icon: '📦', tab: 'cargos' },
-                                        { label: 'Cihaz Durumu', val: stats.connectedDevices, icon: '📱', tab: 'logs' }
-                                    ].map(s => (
+                                <div className={`p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${dashboardCards.length} gap-6 animate-fade-in h-full overflow-y-auto`}>
+                                    {dashboardCards.map(s => (
                                         <div 
                                             key={s.label} 
                                             onClick={() => setActiveTab(s.tab)}
@@ -979,7 +1143,7 @@
                             )}
                             {activeTab === 'villas' && <VillaPage villas={villas} contacts={contacts} onUpdate={fetchData} />}
                             {activeTab === 'contacts' && <ContactPage contacts={contacts} allVillas={villas} onUpdate={fetchData} />}
-                            {activeTab === 'cargos' && <CargoPage cargos={cargos} companies={companies} />}
+                            {activeTab === 'cargos' && modules.includes('cargos') && <CargoPage cargos={cargos} companies={companies} />}
                             {activeTab === 'faults' && <FaultPage cameras={cameras} intercoms={intercoms} />}
                             {activeTab === 'logs' && <LogPage devices={devices} />}
                             {activeTab === 'settings' && <SettingsPage theme={theme} setTheme={setTheme} />}

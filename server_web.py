@@ -14,7 +14,7 @@ except ImportError as e:
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Request, UploadFile, File
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 import websockets
 from pydantic import BaseModel
 from typing import List, Optional, Dict
@@ -150,8 +150,56 @@ def insert_db(sql, params=()):
 
 run_db = insert_db
 
+# --- PROJE YAPILANDIRMASI ---
+
+# Proje tipleri ve her tipin sahip olduğu modüller
+PROJECT_TYPES = {
+    "VILLA": {
+        "label": "Villa Sitesi",
+        "unit_label": "Villa",
+        "unit_label_plural": "Villalar",
+        "modules": ["units", "contacts", "cargos", "cameras", "intercoms"],
+        "has_hierarchy": False,  # Villalar düz listedir (blok/kat yok)
+    },
+    "BLOCK": {
+        "label": "Blok Sitesi",
+        "unit_label": "Daire",
+        "unit_label_plural": "Daireler",
+        "modules": ["units", "contacts", "cargos", "cameras", "intercoms"],
+        "has_hierarchy": True,   # Blok > Kat > Daire hiyerarşisi
+    },
+    "MALL": {
+        "label": "AVM / İş Merkezi",
+        "unit_label": "Mağaza",
+        "unit_label_plural": "Mağazalar",
+        "modules": ["units", "contacts", "cameras", "intercoms"],  # Kargo YOK
+        "has_hierarchy": True,   # Blok > Kat > Mağaza hiyerarşisi
+    },
+}
+
+def get_project_config():
+    """Veritabanından proje yapılandırmasını oku. Kurulum yapılmamışsa None döndür."""
+    try:
+        row = query_db("SELECT * FROM config WHERE key = 'project_type'", one=True)
+        if row:
+            ptype = dict(row).get("value", "VILLA")
+            config = PROJECT_TYPES.get(ptype, PROJECT_TYPES["VILLA"]).copy()
+            config["project_type"] = ptype
+            # Site adını da oku
+            name_row = query_db("SELECT * FROM config WHERE key = 'site_name'", one=True)
+            config["site_name"] = dict(name_row).get("value", "SecuAsist") if name_row else "SecuAsist"
+            config["is_configured"] = True
+            return config
+        return {"is_configured": False}
+    except Exception:
+        return {"is_configured": False}
+
 def init_db():
     schema = """
+    CREATE TABLE IF NOT EXISTS config (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    );
     CREATE TABLE IF NOT EXISTS villas (
         villaId INTEGER PRIMARY KEY AUTOINCREMENT,
         villaNo INTEGER,
@@ -516,6 +564,29 @@ async def get_index():
 async def get_version():
     return {"version": VERSION, "updatedAt": os.path.getmtime(__file__)}
 
+@app.get("/api/v1/config")
+async def get_config():
+    """Proje yapılandırmasını döndür. Kurulum yapılmamışsa is_configured=False gelir."""
+    return get_project_config()
+
+class SetupRequest(BaseModel):
+    project_type: str  # VILLA, BLOCK, MALL
+    site_name: Optional[str] = "SecuAsist"
+
+@app.post("/api/v1/setup")
+async def setup_project(req: SetupRequest):
+    """İlk kurulum sihirbazı: Proje tipini ve site adını ayarla."""
+    if req.project_type not in PROJECT_TYPES:
+        raise HTTPException(status_code=400, detail=f"Geçersiz proje tipi: {req.project_type}. Geçerli tipler: {list(PROJECT_TYPES.keys())}")
+    
+    run_db("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", ("project_type", req.project_type))
+    run_db("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", ("site_name", req.site_name or "SecuAsist"))
+    
+    logger.info(f"🏗️ Proje kurulumu tamamlandı: {PROJECT_TYPES[req.project_type]['label']} - {req.site_name}")
+    add_system_log("SUCCESS", "SYSTEM", f"Proje kurulumu: {PROJECT_TYPES[req.project_type]['label']} - {req.site_name}")
+    
+    return get_project_config()
+
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await websocket.accept()
@@ -537,17 +608,26 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 
 @app.get("/api/v1/stats")
 async def get_stats():
+    config = get_project_config()
     v_count = query_db("SELECT COUNT(*) FROM villas", one=True)[0]
     c_count = query_db("SELECT COUNT(*) FROM contacts", one=True)[0]
     ca_count = query_db("SELECT COUNT(*) FROM cargos", one=True)[0]
     cam_count = query_db("SELECT COUNT(*) FROM cameras", one=True)[0]
-    return {
-        "villas": v_count, 
+    
+    stats = {
+        "units": v_count, 
         "contacts": c_count, 
-        "cargos": ca_count, 
         "cameras": cam_count,
-        "connectedDevices": len(connected_clients)
+        "connectedDevices": len(connected_clients),
+        "config": config
     }
+    # Kargo sadece destekleyen modlarda gösterilir
+    if config.get("is_configured") and "cargos" in config.get("modules", []):
+        stats["cargos"] = ca_count
+    else:
+        stats["cargos"] = ca_count  # Varsayılan: her zaman göster (kurulum yapılmamışsa)
+    
+    return stats
 
 @app.get("/api/v1/logs")
 async def get_logs():
